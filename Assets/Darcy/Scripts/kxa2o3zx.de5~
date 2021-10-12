@@ -1,0 +1,702 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Author: Darcy Matheson
+
+public class Movement : MonoBehaviour
+{
+    #region Variables
+
+    #region Private
+
+    // Represents the player's WASD input on the horizontal and vertical axes
+    Vector2 inputVector;
+
+    // Used for tracking velocity between FixedUpdate() iterations
+    Vector3 currentVelocity;
+    Vector3 newVelocity;
+    Vector3 walkVelocity;
+    Vector3 maxCurrentVelocity;
+    float maxCurrentVelocityMagnitude;
+
+    // Movement State Tracking
+    public bool applyingGravity = false;
+    public bool isGrounded = true;
+    public bool lastGroundState = true;
+    public bool isSprinting = false;
+    public bool isCrouching = false;
+    public bool lastCrouchState = false;
+    public bool canJump = true;
+    public bool waitingToJump = false;
+    public bool canMantle = true;
+    public bool isMantling = false;
+    public bool startedSliding = false;
+    public bool isSliding = false;
+    public bool isSlopeSliding = false;
+    public bool isSlideJumping = false;
+
+    [Header("Crouch / Walk / Sprint Movement")]
+    public float acceleration = 50f;
+    public float airAcceleration = 10f;
+    public float directionChangeCoefficient = 2f;
+
+    public float walkSpeed = 6f;
+    public float sprintMultiplier = 2f;
+    public float crouchMultiplier = 0.5f;
+
+    public float dragMultiplier = 10f;
+    public float airDragMultiplier = 1f;
+
+    [Header("Ground Validation")]
+    public LayerMask groundLayers;
+    public int groundCheckPoints = 7;
+    public float groundCheckDistance = 0.3f;
+
+    [Header("Gravity")]
+    public float gravityStrength = 40f;
+
+    [Header("Jump")]
+    public float jumpHeight = 3f;
+    public int jumpBufferDepth = 20;
+    public int groundContactBufferDepth = 30;
+
+    private Queue<bool> jumpBuffer;
+    private Queue<bool> groundContactBuffer;
+
+    [Header("Surface Magnetism")]
+    public float surfaceMagnetismStrength = 3f;
+    public float magnetismVelocityThreshold = 2f;
+    public float surfaceMagnetismRange = 2f;
+
+    [Header("Ledge Mantle")]
+    public Vector3 mantleVelocity; // Default: (right: 0, up: 8, forward: 10)
+    public float mantleHeadCheckHeight = 2.5f;
+    public float mantleFootholdHeight = 1f;
+    public float mantleClearedHeight = 0f;
+
+    [Header("Crouch")]
+    public float crouchTime = 0.1f;
+    public float crouchHeight = 1f;
+
+    private float standardHeight = 2f;
+
+    [Header("Sliding")]
+    public float slideInitialVelocityMultiplier = 2f;
+    public float slideDragMultiplier = 4f;
+    public float slideAirDragMultiplier = 2f;
+    public float slopeForceMultiplier = 30f;
+    public float slopeDragMultiplier = 0.5f;
+
+    public float minSlopeSlideGradient = 0.3f;
+    public float maxSlopeSlideGradient = 1f;
+
+    [Header("Options")]
+    public bool toggleSprint = true;
+    public bool toggleCrouch = false;
+
+    [Header("Components")]
+    public Transform headTransform;
+    public Transform playerTransform;
+    public Rigidbody playerRigidbody;
+    public CapsuleCollider playerCollider;
+
+    #endregion
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        #region Initialisation
+
+        jumpBuffer = new Queue<bool>();
+        groundContactBuffer = new Queue<bool>();
+
+        canJump = true;
+
+        standardHeight = playerCollider.height;
+
+        #endregion
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        lastCrouchState = isCrouching;
+
+        #region Input Handling
+
+        #region WASD Input
+
+        // Get the keyboard WASD input and normalise it
+        inputVector.x = Input.GetAxisRaw("Horizontal");
+        inputVector.y = Input.GetAxisRaw("Vertical");
+        inputVector.Normalize();
+
+        #endregion
+
+        #region Jump Input
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            waitingToJump = true;
+        }
+
+        #endregion
+
+        #region Crouch / Slide Input
+
+        // Allow crouch when grounded
+        if (isGrounded && canJump)
+        {
+            if (toggleCrouch)
+            {
+                if (Input.GetKeyDown(KeyCode.LeftControl))
+                {
+                    // Toggle crouch
+                    isCrouching = !isCrouching;
+                }
+            }
+            else
+            {
+                if (Input.GetKey(KeyCode.LeftControl))
+                {
+                    // Hold crouch
+                    isCrouching = true;
+                }
+                else
+                {
+                    // Hold crouch
+                    isCrouching = false;
+                }
+            }
+
+            // If we just started crouching this frame
+            if (lastCrouchState == false && isCrouching)
+            {
+                // If we were sprinting previously and moving forward
+                if (isSprinting && inputVector.y > 0f)
+                {
+                    isSliding = true;
+                    startedSliding = true;
+                }
+            }
+            
+            // Stop sprinting if we were previously crouching
+            if (isCrouching)
+            {
+                isSprinting = false;
+            }
+        }
+
+
+        #endregion
+
+        #endregion
+
+        #region Sprint On/Off
+
+        #region Direct Changes
+
+        // Allow sprint when grounded
+        if (isGrounded && canJump)
+        {
+            if (toggleSprint)
+            {
+                if (Input.GetKeyDown(KeyCode.LeftShift))
+                {
+                    // Toggle sprint
+                    isSprinting = !isSprinting;
+
+                    // If crouching, uncrouch and sprint
+                    if (isCrouching)
+                    {
+                        isCrouching = false;
+                        isSprinting = true;
+                    }
+                }
+            }
+            else
+            {
+                if (Input.GetKey(KeyCode.LeftShift))
+                {
+                    // Hold sprint
+                    isSprinting = true;
+                    isCrouching = false;
+                }
+                else
+                {
+                    // Hold sprint
+                    isSprinting = false;
+                }
+            }
+
+        }
+
+        #endregion
+
+        #region Indirect Changes
+
+        // When the player is no longer moving forward
+        if (inputVector.y <= 0f)
+        {
+            isSprinting = false;
+        }
+
+        // When the player runs into a wall
+
+
+        // When the player uses an ability or enters combat
+        if (isMantling)
+        {
+            isSprinting = false;
+        }
+
+        #endregion
+
+        #endregion
+    }
+
+    // FixedUpdate is called every physics iteration
+    void FixedUpdate()
+    {
+        // Read current velocity values
+        CheckVelocity();
+        newVelocity = currentVelocity;
+
+        #region Ground Contact Checks
+
+        //Update the previous state
+        lastGroundState = isGrounded;
+
+        int groundContactCount = 0; // How many points of contact are made between the player and the ground
+
+        float angleDelta = 360 / groundCheckPoints; // How many degrees apart each of the angles are 
+        float radius = 0.5f; // How far outward the ray origins are from the player transform origin
+
+        for (int pointNumber = 0; pointNumber < groundCheckPoints; pointNumber++)
+        {
+            float currentAngle = (pointNumber * angleDelta) + playerTransform.localRotation.eulerAngles.y;
+
+            Vector3 rayOrigin;
+            rayOrigin.x = (Mathf.Sin(Mathf.Deg2Rad * currentAngle) * radius) + playerTransform.position.x;
+            rayOrigin.y = playerTransform.position.y + 0.5f; // Cast from a little above the ground
+            rayOrigin.z = (Mathf.Cos(Mathf.Deg2Rad * currentAngle) * radius) + playerTransform.position.z;
+
+            //If the ground intersected with this ray
+            if (Physics.Raycast(rayOrigin, Vector3.down, (groundCheckDistance + 0.5f), groundLayers))
+            {
+                groundContactCount++;
+            }
+        }
+
+        //Set grounded (true/false) based on contact count
+        isGrounded = (groundContactCount > 1);
+
+        //Call grounded state change functions
+        if (isGrounded && lastGroundState == false)
+        {
+            GroundDetectionEnter();
+        }
+        else if (isGrounded == false && lastGroundState)
+        {
+            GroundDetectionExit();
+        }
+
+        #endregion
+
+        #region Walking / Sprinting / Deceleration
+
+        // Which way the player should move in world space
+        Vector3 targetVector = ((playerTransform.forward * inputVector.y) + (playerTransform.right * inputVector.x)).normalized;
+
+        // If we aren't sliding, allow WASD movement
+        if (isSliding == false)
+        {
+            // Determine how hard the player is changing direction and scale multiplier towards 0
+            float directionChangeMultiplier = ((1f - Vector3.Dot(targetVector, walkVelocity.normalized) / 2f) * directionChangeCoefficient) + 1f;
+
+            // Calculate acceleration force
+            Vector3 movementForce = targetVector * directionChangeMultiplier;
+
+            // Apply different acceleration in air and on the ground
+            playerRigidbody.AddForce(movementForce * (isGrounded ? acceleration : airAcceleration), ForceMode.Force);
+        }
+
+        CheckVelocity();
+
+        // Applying varying deceleration forces
+        if (walkVelocity.magnitude > maxCurrentVelocityMagnitude && (isSliding == false && isSlideJumping == false))
+        {
+            // If the player's walk/sprint speed is currently exceeding its expected maximum
+            Vector3 excessVelocityDrag = (maxCurrentVelocity - walkVelocity);
+
+            // Apply speed restraining drag force
+            playerRigidbody.AddForce(excessVelocityDrag, ForceMode.Impulse);
+        }
+        else if (inputVector == Vector2.zero && (isSliding == false && isSlideJumping == false))
+        {
+            // If the player should come to a natural stop
+            Vector3 restingDrag = Vector3.zero - walkVelocity;
+
+            // Change drag in air and on the ground
+            restingDrag *= (isGrounded ? dragMultiplier : airDragMultiplier);
+
+            // Apply drag
+            playerRigidbody.AddForce(restingDrag, ForceMode.Force);
+        }
+        else if (isSliding || isSlideJumping)
+        {
+            // If the player should slow down due to sliding or slide jumping
+            Vector3 slideDrag = (Vector3.zero - walkVelocity) * (isGrounded ? slideDragMultiplier : slideAirDragMultiplier);
+
+            // Adjust drag when sliding down slope
+            slideDrag *= (isSlopeSliding ? slopeDragMultiplier : 1f);
+
+            // Apply drag
+            playerRigidbody.AddForce(slideDrag, ForceMode.Force);
+        }
+
+        #endregion
+
+        #region Artificial Gravity
+
+        // Only apply gravity when the player is off the ground
+        applyingGravity = (isGrounded == false && isMantling == false);
+
+        // Accumulate gravity acceleration from last iteration
+        newVelocity.y = playerRigidbody.velocity.y;
+
+        if (applyingGravity)
+        {
+            newVelocity.y -= gravityStrength * Time.fixedDeltaTime;
+        }
+
+        #endregion
+
+        #region Jump Handling (Coyote Time and Input Buffering)
+
+        #region Coyote Time
+
+        //Record ground contact status
+        groundContactBuffer.Enqueue(isGrounded);
+
+        //Constrain queue to set size
+        if (groundContactBuffer.Count > groundContactBufferDepth)
+        {
+            groundContactBuffer.Dequeue();
+        }
+
+        //If there is a ground contact in the queue and the player is waiting to jump
+        if (groundContactBuffer.Contains(true) && waitingToJump && canJump)
+        {
+            //Empty the input buffer
+            groundContactBuffer.Clear();
+            jumpBuffer.Clear();
+            waitingToJump = false;
+            canJump = false;
+
+            //Perform the jump (prior velocity ignored)
+            newVelocity.y = Mathf.Sqrt(2f * gravityStrength * (jumpHeight - (groundCheckDistance / 2f)));
+            isCrouching = false;
+
+            // Sprint out of slide jump
+            if (isSliding)
+            {
+                isSprinting = true;
+                isSlideJumping = true;
+            }
+        }
+
+        #endregion
+
+        #region Input Buffering
+
+        //Record record jump input status
+        jumpBuffer.Enqueue(waitingToJump);
+        waitingToJump = false;
+
+        //Constrain queue to set size
+        if (jumpBuffer.Count > jumpBufferDepth)
+        {
+            jumpBuffer.Dequeue();
+        }
+
+        //If there is an input in the queue and the player has landed on the ground
+        if (jumpBuffer.Contains(true) && isGrounded && canJump)
+        {
+            //Empty the input buffer
+            jumpBuffer.Clear();
+            groundContactBuffer.Clear();
+            canJump = false;
+
+            //Perform the jump (prior velocity ignored)
+            newVelocity.y = Mathf.Sqrt(2f * gravityStrength * (jumpHeight - (groundCheckDistance / 2f)));
+            isCrouching = false;
+
+            // Sprint out of slide jump
+            if (isSliding)
+            {
+                isSprinting = true;
+                isSlideJumping = true;
+            }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region Crouching / Sliding
+
+        #region Crouching
+
+        if (isCrouching)
+        {
+            // If the player isn't fully crouched
+            if (playerCollider.height > crouchHeight)
+            {
+                // Reduce height
+                float iterations = crouchTime / Time.fixedDeltaTime;
+                float scalePerIteration = (standardHeight - crouchHeight) / iterations;
+                playerCollider.height -= scalePerIteration;
+
+                // Lower centre point
+                Vector3 centrePoint = Vector3.zero;
+                centrePoint.y = playerCollider.center.y - (scalePerIteration / 2f);
+                playerCollider.center = centrePoint;
+
+                // Lower head point
+                headTransform.localPosition = centrePoint * 2f;
+            }
+
+            // If the player is below the minimum height
+            if (playerCollider.height < crouchHeight)
+            {
+                // Set to the exact crouch height
+                playerCollider.height = crouchHeight;
+
+                // Set centre point of collider
+                Vector3 centrePoint = Vector3.zero;
+                centrePoint.y = crouchHeight / 2f;
+                playerCollider.center = centrePoint;
+
+                // Set head point
+                headTransform.localPosition = centrePoint * 2f;
+            }
+        }
+        else
+        {
+            // If the player hasn't fully stood up
+            if (playerCollider.height < standardHeight)
+            {
+                // Reduce height
+                float iterations = crouchTime / Time.fixedDeltaTime;
+                float scalePerIteration = (standardHeight - crouchHeight) / iterations;
+                playerCollider.height += scalePerIteration;
+
+                // Lower centre point
+                Vector3 centrePoint = Vector3.zero;
+                centrePoint.y = playerCollider.center.y + (scalePerIteration / 2f);
+                playerCollider.center = centrePoint;
+
+                // Lower head point
+                headTransform.localPosition = centrePoint * 2f;
+            }
+
+            // If the player has stood up too far
+            if (playerCollider.height > standardHeight)
+            {
+                // Set to the exact crouch height
+                playerCollider.height = standardHeight;
+
+                // Set centre point of collider
+                Vector3 centrePoint = Vector3.zero;
+                centrePoint.y = standardHeight / 2f;
+                playerCollider.center = centrePoint;
+
+                // Set head point
+                headTransform.localPosition = centrePoint * 2f;
+            }
+        }
+
+        #endregion
+
+        #region Sliding
+
+        isSlopeSliding = false;
+
+        // If we are meeting all conditions for sliding
+        if (isCrouching && isSliding && walkVelocity.magnitude > maxCurrentVelocityMagnitude)
+        {
+            // If we just started the slide
+            if (startedSliding)
+            {
+                startedSliding = false;
+
+                // Apply initial velocity boost
+                playerRigidbody.AddForce(walkVelocity * slideInitialVelocityMultiplier, ForceMode.VelocityChange);
+            }
+
+            #region Slope Sliding
+
+            RaycastHit hit;
+            if (Physics.Raycast((playerTransform.position + Vector3.up), Vector3.down, out hit, surfaceMagnetismRange, groundLayers))
+            {
+                // The normal vector of the face directly below the player
+                Vector3 faceNormal = hit.normal;
+
+                // Represent the slope from the side (2 dimensional projection)
+                // Gradient is the inverse of the normal, so x and y are swapped
+                Vector2 slopeGradientSample = Vector2.zero;
+                slopeGradientSample.y = Mathf.Sqrt((faceNormal.x * faceNormal.x) + (faceNormal.z * faceNormal.z));
+                slopeGradientSample.x = faceNormal.y;
+                slopeGradientSample.Normalize();
+
+                // Gradient = Rise / Run
+                float slopeGradient = slopeGradientSample.y / slopeGradientSample.x;
+                
+                // If the slope is steep enough to slide down
+                if (slopeGradient >= minSlopeSlideGradient)
+                {
+                    // Find the perpendicular vector to the normal and the vertical axis (the axis at which the ramp is viewed orthographically)
+                    Vector3 slopeAxis = Vector3.Cross(faceNormal, Vector3.up).normalized; 
+
+                    // Find the perpendicular vector to the face normal and the slopeAxis (the direction of the slope, facing downward)
+                    Vector3 globalSlopeDirection = Vector3.Cross(faceNormal, slopeAxis).normalized;
+
+                    // If the player is sliding toward the down vector of the ramp
+                    if (Vector3.Dot(globalSlopeDirection, currentVelocity) > 0f)
+                    {
+                        isSlopeSliding = true;
+
+                        // Determine magnitude of slide force
+                        Vector3 rampSlideForce = globalSlopeDirection * slopeForceMultiplier;
+
+                        // Apply sliding force in direction of ramp
+                        playerRigidbody.AddForce(rampSlideForce, ForceMode.Force);
+                    }
+                }
+            }
+
+            #endregion
+        }
+        else
+        {
+            // The slide has ended
+            isSliding = false;
+            startedSliding = false;
+        }
+
+        #endregion
+
+        #endregion
+
+        #region Ledge Mantle
+
+        bool headCleared = false;
+        bool footholdValid = false;
+        bool mantleCleared = false;
+
+        // If the ledge ahead of the player's head is clear
+        if (Physics.Raycast(playerTransform.position + (Vector3.up * mantleHeadCheckHeight), playerTransform.forward, 2f, groundLayers) == false)
+        {
+            headCleared = true;
+        }
+
+        // If the cliff face ahead of the player's foothold is present
+        if (Physics.Raycast(playerTransform.position + (Vector3.up * mantleFootholdHeight), playerTransform.forward, 2f, groundLayers))
+        {
+            footholdValid = true;
+        }
+
+        // If the player has cleared the ledge they were mantling on
+        if (Physics.Raycast(playerTransform.position + (Vector3.up * mantleClearedHeight), playerTransform.forward, 2f, groundLayers) == false)
+        {
+            if (isMantling)
+            {
+                mantleCleared = true;
+            }
+        }
+
+        // If conditions are met for ledge mantle or we are currently mantling
+        if ((headCleared && footholdValid && isGrounded == false && inputVector.y > 0f && isCrouching == false && canMantle) || isMantling)
+        {
+            newVelocity = Vector3.zero;
+            newVelocity = (playerTransform.forward * mantleVelocity.z) + (playerTransform.right * mantleVelocity.x);
+            newVelocity.y = mantleVelocity.y;
+            isMantling = true;
+
+            // If we are mantling and the conditions fail
+            if (headCleared == false || (footholdValid == false && mantleCleared) || isGrounded)
+            {
+                isMantling = false;
+                canMantle = false;
+            }
+        }
+        else
+        {
+            // If we were mantling and just stopped
+            if (isMantling)
+            {
+                canMantle = false;
+            }
+
+            isMantling = false;
+        }
+
+        #endregion
+
+        #region Surface Magnetism
+
+        if (isGrounded && canJump && (currentVelocity.magnitude > magnetismVelocityThreshold || inputVector == Vector2.zero))
+        {
+            RaycastHit hit;
+
+            if (Physics.Raycast((playerTransform.position + Vector3.up), Vector3.down, out hit, surfaceMagnetismRange, groundLayers))
+            {
+                //The inverse surface normal directly below the player, scaled by a strength value
+                Vector3 magnetismForce = -hit.normal * surfaceMagnetismStrength * hit.distance;
+                playerRigidbody.AddForce(magnetismForce, ForceMode.Impulse);
+            }
+        }
+
+        #endregion
+
+        // Adjust modified y-velocity if we are currently capable of jumping/falling
+        if (isMantling == false)
+        {
+            CheckVelocity();
+            newVelocity.x = currentVelocity.x;
+            newVelocity.z = currentVelocity.z;
+        }
+
+        // Apply modified velocity
+        playerRigidbody.velocity = newVelocity;
+    }
+
+    // Read current velocity values from Rigidbody
+    void CheckVelocity()
+    {
+        currentVelocity = playerRigidbody.velocity;
+
+        walkVelocity = currentVelocity;
+        walkVelocity.y = 0f;
+
+        // The max speed of the player, whether walking, sprinting or crouch walking
+        maxCurrentVelocityMagnitude = walkSpeed * (isSprinting ? sprintMultiplier : 1f) * (isCrouching ? crouchMultiplier : 1f);
+        maxCurrentVelocity = walkVelocity.normalized * maxCurrentVelocityMagnitude;
+    }
+
+    //When the player first touches the ground
+    void GroundDetectionEnter()
+    {
+        canJump = true;
+        canMantle = true;
+        isSlideJumping = false;
+    }
+
+    //When the player first leaves the ground
+    void GroundDetectionExit()
+    {
+        
+    }
+}
