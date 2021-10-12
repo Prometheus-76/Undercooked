@@ -1,0 +1,216 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &7247837980400235156
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7247837980400235158}
+  - component: {fileID: 7247837980400235159}
+  - component: {fileID: 7247837980400235153}
+  - component: {fileID: 7247837980400235155}
+  m_Layer: 0
+  m_Name: Player
+  m_TagString: Untagged
+  m_Icon: {fileID: -964228994112308473, guid: 0000000000000000d000000000000000, type: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7247837980400235158
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7247837980400235156}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children:
+  - {fileID: 7247837981465184782}
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &7247837980400235159
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7247837980400235156}
+  m_Material: {fileID: 13400000, guid: 8d88e24ddef1857488051da9d216b036, type: 2}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  m_Radius: 0.5
+  m_Height: 2
+  m_Direction: 1
+  m_Center: {x: 0, y: 1, z: 0}
+--- !u!54 &7247837980400235153
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7247837980400235156}
+  serializedVersion: 2
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0
+  m_UseGravity: 0
+  m_IsKinematic: 0
+  m_Interpolate: 1
+  m_Constraints: 80
+  m_CollisionDetection: 1
+--- !u!114 &7247837980400235155
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7247837980400235156}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccd45cc58ed16d8459eb7a6a8ecc36d0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  baseMoveSpeed: 6
+  groundAcceleration: 50
+  airAcceleration: 10
+  directionChangeCoefficient: 2
+  sprintMoveSpeedCoefficient: 2
+  crouchMoveSpeedCoefficient: 0.5
+  groundDragCoefficient: 10
+  airDragCoefficient: 0.2
+  groundLayerMask:
+    serializedVersion: 2
+    m_Bits: 256
+  groundCheckResolution: 8
+  groundCheckDistance: 0.1
+  groundCheckCooldown: 0.1
+  gravityAcceleration: 40
+  jumpHeight: 3
+  jumpInputBufferDepth: 20
+  groundContactBufferDepth: 30
+  magnetismStrengthCoefficient: 3
+  magnetismMinVelocityThreshold: 2
+  magnetismRange: 2
+  magnetismVelocityScaling: 0.1
+  mantleVelocity: {x: 0, y: 8, z: 10}
+  mantleHeadCheckHeight: 2.5
+  mantleFootholdHeight: 1.5
+  mantleClearedHeight: -0.1
+  crouchTransitionTime: 0.1
+  crouchColliderHeight: 1
+  slideInitialVelocityCoefficient: 1.2
+  slideGroundDragCoefficient: 2.5
+  slideAirDragCoefficient: 2
+  slideSlopeForceCoefficient: 25
+  slideSlopeDragCoefficient: 0.5
+  slideSlopeMinAngle: 10
+  slideSlopeMaxAngle: 90
+  grappleMinRange: 3
+  grappleMaxRange: 20
+  grappleMinHeightOffset: 1
+  minimumAngularSimilarity: 0.9
+  grapplePointLayerMask:
+    serializedVersion: 2
+    m_Bits: 512
+  grappleVelocity: 40
+  grapplePointVerticalOffset: 1
+  grappleLineResolution: 500
+  grappleRopeEffectCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 3.7181478
+      outSlope: 3.7181478
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.0074525746
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 136
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  grappleEffectWaveHeight: 1
+  grappleEffectWaveCount: 2
+  grappleRopeFireSpeed: 20
+  grappleRopeEffectDuration: 0.3
+  grappleRopeEffectScrollSpeed: 5
+  grappleRopeTimeDropoffCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: -1.5106802
+      outSlope: -1.5106802
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0.03590786
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: -0.2627269
+      outSlope: -0.2627269
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.035907865
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  gunRotationSpeed: 10
+  toggleCrouch: 0
+  cameraHolderTransform: {fileID: 0}
+  headPointTransform: {fileID: 7247837981465184782}
+  weaponPointTransform: {fileID: 0}
+  weaponHolderTransform: {fileID: 0}
+  playerTransform: {fileID: 7247837980400235158}
+  playerRigidbody: {fileID: 7247837980400235153}
+  playerCollider: {fileID: 7247837980400235159}
+  grappleLine: {fileID: 0}
+--- !u!1 &7247837981465184783
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7247837981465184782}
+  m_Layer: 0
+  m_Name: HeadPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7247837981465184782
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7247837981465184783}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.9, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 7247837980400235158}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
