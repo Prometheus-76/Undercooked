@@ -35,8 +35,8 @@ TagManager:
   - 
   - 
   - 
-  - 
-  - 
+  - Invis Wall
+  - Editor Only
   m_SortingLayers:
   - name: Default
     uniqueID: 0
