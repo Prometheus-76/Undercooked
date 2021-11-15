@@ -1,0 +1,234 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Author: Darcy Matheson
+// Purpose: A base class for the guns used in the game, allowing all kinds of configuration which can convert guns between archetypes.
+
+public class GunController : MonoBehaviour
+{
+    public float swapTime;
+
+    public enum WeaponType
+    {
+        MicrowaveGun,
+        ASaltRifle,
+        PepperShotgun
+    }
+
+    public WeaponType weaponType;
+
+    public bool isCurrentlyEquipped;
+
+    bool inputAcknowledged;
+
+    public int magazineSize;
+    public int ammoTotalReserves;
+    int currentAmmoInMagazine;
+    int currentAmmoInReserves;
+    public int ammoPerRound;
+
+    public bool fullAutoFiring;
+    public int shotsPerRound;
+    public int roundsPerMinute;
+    float shotTimeInterval;
+    float shotIntervalTimer;
+
+    public int dropoffRange;
+    public int maxRange;
+
+    public int damagePerBullet;
+    public bool piercingBullets;
+
+    public float bulletSpreadAngle;
+
+    public float recoilDistance;
+    public float recoilRecoveryTime;
+
+    public float screenshakeDuration;
+    public float screenshakeStrength;
+
+    public float reloadDuration;
+    public int reloadRotations;
+    public AnimationCurve rotationCurve;
+    float reloadTimer;
+
+    public bool isReloading { get; private set; }
+    public TrailRenderer reloadSmoke;
+
+    public Transform weaponContainerTransform;
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        // Start with gun full of ammo
+        currentAmmoInMagazine = magazineSize;
+        currentAmmoInReserves = ammoTotalReserves;
+
+        // Calculate shot interval from rounds per minute
+        shotTimeInterval = (float)(60f / roundsPerMinute);
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        #region Player Inputs
+
+        if (isCurrentlyEquipped && WeaponCoordinator.switchingWeapons == false && Movement.isGrappling == false)
+        {
+            if (isReloading == false && currentAmmoInMagazine == 0 && (currentAmmoInReserves > 0 || ammoTotalReserves == -1))
+            {
+                // No ammo, auto reload
+                isReloading = true;
+                reloadTimer = reloadDuration;
+            }
+            else if (Input.GetKey(KeyCode.R) && isReloading == false && currentAmmoInMagazine < magazineSize && (currentAmmoInReserves > 0 || ammoTotalReserves == -1))
+            {
+                // Some ammo, manual reload
+                isReloading = true;
+                reloadTimer = reloadDuration;
+            }
+            else if (Input.GetMouseButton(0) && currentAmmoInMagazine > 0 && shotIntervalTimer <= 0f && isReloading == false)
+            {
+                // Some ammo, shooting
+                if (fullAutoFiring)
+                {
+                    // Firing full auto
+                    shotIntervalTimer = shotTimeInterval;
+                }
+                else if (fullAutoFiring == false && inputAcknowledged == false)
+                {
+                    // Firing manually
+                    shotIntervalTimer = shotTimeInterval;
+                    inputAcknowledged = true;
+                }
+            }
+            else if (Input.GetMouseButtonUp(0) && inputAcknowledged && fullAutoFiring == false)
+            {
+                // The shoot button has been released, allow another manual shot
+                inputAcknowledged = false;
+            }
+        }
+
+        #endregion
+
+        #region Reloading
+
+        if (isReloading)
+        {
+            // Decrement timer
+            reloadTimer -= Time.deltaTime;
+            
+            // Smoke effect on
+            reloadSmoke.emitting = true;
+
+            // Calculate reload progress
+            float progress = Mathf.Clamp01(1f - (reloadTimer / reloadDuration));
+
+            // Evaluate progress on a curve
+            float totalAnglularRotation = 360f * (float)reloadRotations;
+            float newRotation = (rotationCurve.Evaluate(progress) * totalAnglularRotation);
+            Quaternion spinRotation = Quaternion.Euler(Vector3.right * newRotation);
+            weaponContainerTransform.localRotation = spinRotation;
+
+            // When reload has ended
+            if (reloadTimer <= 0f)
+            {
+                isReloading = false;
+
+                // The maximum amount of extra ammo that can be put in the magazine out of reserves
+                if (ammoTotalReserves == -1)
+                {
+                    // Infinite reserves
+                    currentAmmoInMagazine = magazineSize;
+                }
+                else
+                {
+                    // Limited ammo in reserves
+                    int missingAmmo = Mathf.Clamp(magazineSize - currentAmmoInMagazine, 0, currentAmmoInReserves);
+                    currentAmmoInReserves -= missingAmmo;
+                    currentAmmoInMagazine += missingAmmo;
+                }
+
+                // Snap rotation to finished position
+                weaponContainerTransform.localRotation = Quaternion.identity;
+                
+                // Smoke effect off
+                reloadSmoke.emitting = false;
+            }
+        }
+
+        #endregion
+    }
+
+    void FixedUpdate()
+    {
+        #region Shooting
+
+        if (shotIntervalTimer > 0f)
+        {
+            // Fire weapon immediately
+            if (shotIntervalTimer == shotTimeInterval)
+            {
+                ShootWeapon();
+            }
+
+            // Decrement timer
+            shotIntervalTimer -= Time.fixedDeltaTime;  
+        }
+
+        #endregion
+    }
+
+    // Fires a single round from the weapon
+    void ShootWeapon()
+    {
+        // Subtract ammo per round
+        currentAmmoInMagazine -= ammoPerRound;
+
+        // Calculate bullet positions
+        for (int bulletNumber = 0; bulletNumber < shotsPerRound; bulletNumber++)
+        {
+
+        }
+
+        RecoilWeapon();
+    }
+
+    void RecoilWeapon()
+    {
+
+    }
+
+    int CalculateDamage(float baseDamage, float range)
+    {
+        int result = 0;
+
+        if (range <= dropoffRange)
+        {
+            result = Mathf.CeilToInt(baseDamage);
+        }
+        else if (range < maxRange)
+        {
+            // Damage dropoff
+            result = (baseDamage * Mathf.Sqrt(maxRange - range)) / (Mathf.Sqrt(maxRange - dropoffRange));
+        }
+        else
+        {
+            // Shot is out of range (deal no damage)
+            result = 0;
+        }
+
+        return result;
+    }
+
+    float ReloadSpinCurve(float progress)
+    {
+        float result = 0f;
+
+        result = (Mathf.Cos(Mathf.PI * (progress + 1f)) + 1f) / 2f;
+        result = Mathf.Clamp01(result);
+
+        return result;
+    }
+}

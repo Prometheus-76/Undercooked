@@ -1,0 +1,332 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Author: Darcy Matheson
+// Purpose: Responsible for managing weapon inventory, unlocks and swapping
+
+public class WeaponCoordinator : MonoBehaviour
+{
+    #region Variables
+
+    #region Internal
+
+    public static bool switchingWeapons { get; private set; }
+
+    private Quaternion targetWeaponRotation; // The rotation the gun is interpolating towards
+
+    private bool[] unlockedGuns; // MicrowaveGun, ASaltRifle, PepperShotgun
+    private Transform[] gunTransforms;
+    private int gunCount = 0; // How many guns are unlocked
+    private int currentGunIndex = -1; // -1 before weapons are unlocked, afterward, referring to last used gun
+
+    private float weaponStowTimer = 0f;
+    private float weaponStowDuration = 0f; // Not decreased
+    private float weaponDrawTimer = 0f;
+    private float weaponDrawDuration = 0f; // Not decreased
+
+    private Transform currentWeaponTransform; // The weapon we are holding
+    private Transform newWeaponTransform; // The weapon we are swapping to
+
+    public GunController[] gunControllers { get; private set; } // Array of weapon controllers
+
+    #endregion
+
+    #region Parameters
+
+
+
+    #endregion
+
+    #region Components
+
+
+
+    #endregion
+
+    #endregion
+
+    public Vector3 stowedPositionOffset;
+    public AnimationCurve stowAnimationEasing;
+    public AnimationCurve drawAnimationEasing;
+
+    public Movement playerMovement;
+
+    public Transform microwaveGunTransform;
+    public Transform aSaltRifleTransform;
+    public Transform pepperShotgunTransform;
+
+    public Transform[] weaponModelTransforms;
+    public Transform[] grapplePointTransforms;
+    public float[] weaponRotationSpeeds;
+
+    public GunController microwaveGunController;
+    public GunController aSaltRifleController;
+    public GunController pepperShotgunController;
+    
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        #region Initialisation
+
+        unlockedGuns = new bool[3];
+
+        // Set all ranged weapons to locked
+        for (int i = 0; i < unlockedGuns.Length; i++)
+        {
+            unlockedGuns[i] = false;
+        }
+
+        // Setup arrays for Transforms and GunController scripts
+        gunControllers = new GunController[3];
+        gunControllers[0] = microwaveGunController;
+        gunControllers[1] = aSaltRifleController;
+        gunControllers[2] = pepperShotgunController;
+
+        gunTransforms = new Transform[3];
+        gunTransforms[0] = microwaveGunTransform;
+        gunTransforms[1] = aSaltRifleTransform;
+        gunTransforms[2] = pepperShotgunTransform;
+
+        #endregion
+
+        // Default weapon
+        currentGunIndex = -1;
+        switchingWeapons = false;
+
+        UnlockWeapon(0);
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        #region Start Switching Weapons
+
+        // Only allow one swap at a time, not while recoiling
+        if (switchingWeapons == false && Movement.isGrappling == false && gunControllers[currentGunIndex].isRecoiling == false)
+        {
+            if (Input.mouseScrollDelta.y > 0f)
+            {
+                // Swap to previous weapon
+                if (gunCount > 1)
+                {
+                    // Stow current gun
+                    // Swap to previous gun in list
+
+                    // The index of the weapon we will switch to
+                    int newWeaponIndex = currentGunIndex;
+
+                    do
+                    {
+                        // Attempt to find a previous weapon
+                        newWeaponIndex -= 1;
+
+                        // Loop around if out of range of weapons list
+                        if (newWeaponIndex < 0)
+                        {
+                            newWeaponIndex = unlockedGuns.Length - 1;
+                        }
+                    }
+                    while (unlockedGuns[newWeaponIndex] == false);
+
+                    // Swap to previous weapon
+                    SwapToWeapon(newWeaponIndex);
+                }
+            }
+            else if (Input.mouseScrollDelta.y < 0f)
+            {
+                // Swap to next weapon
+                if (gunCount > 1)
+                {
+                    // Stow current gun
+                    // Swap to next gun in list
+
+                    // The index of the weapon we will switch to
+                    int newWeaponIndex = currentGunIndex;
+
+                    do
+                    {
+                        // Attempt to find a next weapon
+                        newWeaponIndex += 1;
+
+                        // Loop around if out of range of weapons list
+                        if (newWeaponIndex > unlockedGuns.Length - 1)
+                        {
+                            newWeaponIndex = 0;
+                        }
+                    }
+                    while (unlockedGuns[newWeaponIndex] == false);
+
+                    // Swap to next weapon
+                    SwapToWeapon(newWeaponIndex);
+                }
+            }
+        }
+
+        #endregion
+
+        #region Swap Weapon Animation
+
+        if (switchingWeapons)
+        {
+            if (weaponStowTimer > 0f)
+            {
+                // Decrease timer
+                weaponStowTimer = Mathf.Clamp(weaponStowTimer - Time.deltaTime, 0f, Mathf.Infinity);
+
+                // Lerp to new point this frame
+                Vector3 newPosition = stowedPositionOffset * stowAnimationEasing.Evaluate(1f - (weaponStowTimer / weaponStowDuration));
+                currentWeaponTransform.localPosition = newPosition;
+
+                // If timer has ended, snap to position
+                if (weaponStowTimer <= 0f)
+                {
+                    currentWeaponTransform.localPosition = stowedPositionOffset;
+
+                    weaponStowTimer = 0f;
+                    weaponStowDuration = 0f;
+
+                    // Hide weapon
+                    currentWeaponTransform.gameObject.SetActive(false);
+                }
+            }
+            else if (weaponDrawTimer > 0f)
+            {
+                // Decrease timer
+                weaponDrawTimer = Mathf.Clamp(weaponDrawTimer - Time.deltaTime, 0f, Mathf.Infinity);
+
+                // Show weapon
+                newWeaponTransform.gameObject.SetActive(true);
+
+                // Lerp to new point this frame
+                Vector3 newPosition = stowedPositionOffset * drawAnimationEasing.Evaluate(1f - (weaponDrawTimer / weaponDrawDuration));
+                newWeaponTransform.localPosition = newPosition;
+
+                // If timer has ended, snap to position
+                if (weaponDrawTimer <= 0f)
+                {
+                    newWeaponTransform.localPosition = Vector3.zero;
+
+                    weaponDrawTimer = 0f;
+                    weaponDrawDuration = 0f;
+                }
+
+                // The weapon swap has ended
+                if (weaponDrawTimer <= 0f)
+                {
+                    switchingWeapons = false;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Weapon Grapple Rotation
+
+        // Rotates all guns at once to ensure they are not misaligned when drawn from the inventory
+        for (int i = 0; i < weaponModelTransforms.Length; i++)
+        {
+            // If the weapon is not currently rotating from a reload 
+            if (gunControllers[i].isReloading == false)
+            {
+                if (Movement.isGrappling)
+                {
+                    // Rotate towards the grappling point
+                    targetWeaponRotation = Quaternion.LookRotation(playerMovement.currentGrapplePoint.position - grapplePointTransforms[i].position);
+                    weaponModelTransforms[i].rotation = Quaternion.Lerp(weaponModelTransforms[i].rotation, targetWeaponRotation, Time.deltaTime * weaponRotationSpeeds[i]);
+                }
+                else
+                {
+                    // Rotate towards the resting position
+                    targetWeaponRotation = weaponModelTransforms[i].parent.localRotation;
+                    weaponModelTransforms[i].localRotation = Quaternion.Lerp(weaponModelTransforms[i].localRotation, targetWeaponRotation, Time.deltaTime * weaponRotationSpeeds[i]);
+                }
+            }
+        }
+
+        #endregion
+
+        #region TESTING - DELETE FOR BUILD
+
+        if (Input.GetKeyDown(KeyCode.Alpha1))
+        {
+            UnlockWeapon(0);
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha2))
+        {
+            UnlockWeapon(1);
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha3))
+        {
+            UnlockWeapon(2);
+        }
+
+        #endregion
+    }
+
+    // Unlock a weapon and attempt to swap to it
+    public void UnlockWeapon(int weaponIndex)
+    {
+        // If the index refers to a valid weapon
+        if (weaponIndex >= 0 && weaponIndex <= 2)
+        {
+            // If the weapon is currently locked and not available to the player
+            if (unlockedGuns[weaponIndex] == false)
+            {
+                unlockedGuns[weaponIndex] = true;
+                gunCount += 1;
+
+                // Swap to this new weapon, fails if a weapon switch is currently already happening
+                SwapToWeapon(weaponIndex);
+            }
+        }
+    }
+
+    // Attempt to swap to a weapon, specified by its index
+    void SwapToWeapon(int weaponIndex)
+    {
+        // Do not allow another switch while currently switching weapons
+        if (switchingWeapons)
+        {
+            return;
+        }
+
+        // Prevent further switching until the animation is complete
+        switchingWeapons = true;
+
+        // If the index refers to a gun which has been unlocked
+        if (weaponIndex >= 0 && weaponIndex <= 2 && unlockedGuns[weaponIndex] == true)
+        {
+            // Set up timers and assign transforms
+
+            if (currentGunIndex != -1)
+            {
+                // The weapon being stowed
+                weaponStowTimer = gunControllers[currentGunIndex].swapTime;
+                weaponStowDuration = gunControllers[currentGunIndex].swapTime;
+                
+                currentWeaponTransform = gunTransforms[currentGunIndex];
+                
+                gunControllers[currentGunIndex].isCurrentlyEquipped = false;
+            }
+
+            // The weapon being drawn
+            weaponDrawTimer = gunControllers[weaponIndex].swapTime;
+            weaponDrawDuration = gunControllers[weaponIndex].swapTime;
+
+            newWeaponTransform = gunTransforms[weaponIndex];
+
+            gunControllers[weaponIndex].isCurrentlyEquipped = true;
+
+            // Swap to gun
+            currentGunIndex = weaponIndex;
+        }
+
+        // Assign grappling points with player movement script
+        playerMovement.weaponTransform = weaponModelTransforms[currentGunIndex];
+        playerMovement.weaponGrapplePointTransform = grapplePointTransforms[currentGunIndex];
+    }
+}

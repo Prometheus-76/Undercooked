@@ -1,0 +1,119 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class GrapplePointUI : MonoBehaviour
+{
+    public float scaleRate = 3f;
+    public float minimumScale = 1f;
+    public Color withinRangeColour;
+    public Gradient outOfRangeColour;
+    public float overallFadeTime = 0.5f;
+    public float highlightFadeTime = 0.2f;
+
+    public Movement playerMovement;
+    public RectTransform canvasTransform;
+
+    public Image pointSelectedImage;
+    private float pointSelectedBaseAlpha;
+
+    public Image radialProgressImage;
+    private float radialProgressBaseAlpha;
+
+    public Image progressUnderlayImage;
+    private float progressUnderlayBaseAlpha;
+
+    public Image fadeUnderlayImage;
+    private float fadeUnderlayBaseAlpha;
+
+    private Transform mainCameraTransform;
+    private float overallAlphaMultiplier = 1f;
+    private float highlightAlphaMultiplier = 1f;
+    private bool validGrapple = false;
+
+    private void Start()
+    {
+        mainCameraTransform = Camera.main.transform;
+
+        pointSelectedBaseAlpha = pointSelectedImage.color.a;
+        radialProgressBaseAlpha = radialProgressImage.color.a;
+        progressUnderlayBaseAlpha = progressUnderlayImage.color.a;
+        fadeUnderlayBaseAlpha = fadeUnderlayImage.color.a;
+    }
+
+    private void LateUpdate()
+    {
+        // Calculate distance between the main camera and this grapple point
+        float distanceToCamera = Vector3.Distance(canvasTransform.position, mainCameraTransform.position);
+        
+        // Fade on/off based on viability within player detection
+        validGrapple = true;
+
+        #region Determine Grapple Viability
+
+        // Must be higher than player by height offset
+        if (canvasTransform.position.y < mainCameraTransform.position.y + playerMovement.grappleMinHeightOffset)
+        {
+            validGrapple = false;
+        }
+
+        // Must be within detection range
+        if (distanceToCamera > playerMovement.grappleDetectionRange || distanceToCamera < playerMovement.grappleMinRange)
+        {
+            validGrapple = false;
+        }
+
+        // Check raycast line of sight to point
+        if (validGrapple && Physics.Raycast(mainCameraTransform.position, (canvasTransform.position - mainCameraTransform.position), distanceToCamera, playerMovement.groundLayerMask))
+        {
+            validGrapple = false;
+        }
+
+        #endregion
+
+        #region Fade Grapple UI On/Off
+
+        if (validGrapple)
+        {
+            overallAlphaMultiplier += (Time.deltaTime / overallFadeTime);
+        }
+        else
+        {
+            overallAlphaMultiplier -= (Time.deltaTime / overallFadeTime);
+        }
+
+        // The overall alpha of the entire grapple UI, 1 is full opacity and 0 is invisible
+        overallAlphaMultiplier = Mathf.Clamp(overallAlphaMultiplier, 0f, 1f);
+
+        pointSelectedImage.color = new Color(pointSelectedImage.color.r, pointSelectedImage.color.g, pointSelectedImage.color.b, pointSelectedBaseAlpha * overallAlphaMultiplier);
+        radialProgressImage.color = new Color(radialProgressImage.color.r, radialProgressImage.color.g, radialProgressImage.color.b, radialProgressBaseAlpha * overallAlphaMultiplier);
+        progressUnderlayImage.color = new Color(progressUnderlayImage.color.r, progressUnderlayImage.color.g, progressUnderlayImage.color.b, progressUnderlayBaseAlpha * overallAlphaMultiplier);
+        fadeUnderlayImage.color = new Color(fadeUnderlayImage.color.r, fadeUnderlayImage.color.g, fadeUnderlayImage.color.b, fadeUnderlayBaseAlpha * overallAlphaMultiplier);
+
+        #endregion
+
+        #region Orientation and Scaling Relative To Camera
+
+        // Rotate towards camera
+        Quaternion rotationToCamera = Quaternion.LookRotation(mainCameraTransform.position - canvasTransform.position);
+        canvasTransform.rotation = rotationToCamera;
+
+        #endregion
+
+        // Scale with distance
+        canvasTransform.localScale = Vector3.one * Mathf.Clamp((distanceToCamera / scaleRate), minimumScale, Mathf.Infinity);
+
+        // Update progress ring
+        float distanceWithinDetection = Mathf.Clamp((playerMovement.grappleDetectionRange - distanceToCamera), 0f, Mathf.Infinity);
+        float detectionRangeDelta = Mathf.Clamp((playerMovement.grappleDetectionRange - playerMovement.grappleMaxRange), 0f, Mathf.Infinity);
+        float rangeProgress = Mathf.Clamp((distanceWithinDetection / detectionRangeDelta), 0f, 1f);
+        radialProgressImage.fillAmount = rangeProgress;
+
+        // Change colours based on completion
+        radialProgressImage.color = (rangeProgress < 1f) ? outOfRangeColour.Evaluate(rangeProgress) : withinRangeColour;
+
+        // Highlight if closest grapple point
+
+    }
+}

@@ -1,0 +1,214 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AI;
+
+public class OnionEnemy : Enemy
+{
+    enum EnemyState
+    {
+        None,
+        Burrowing,
+        Spawning,
+        Seeking,
+        Attacking,
+        Stunned,
+        Dying
+    }
+
+    private EnemyState currentState;
+
+    private Vector3 chargeTarget;
+    private NavMeshPath pathToPlayer;
+
+    public float[] moveSpeeds;
+    public float[] angularSpeeds;
+    public float[] accelerations;
+    public float[] moveDelays;
+    private float moveDelayTimer;
+
+    public float[] stunDurations;
+    private float stunTimer;
+
+    public int[] layerDefenses;
+    public int[] layerPercentages;
+    private int currentLayer;
+
+    public Vector2 attackKnockback;
+    public float[] attackRadiuses;
+    public float[] attackRates;
+    private float attackTimer;
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        base.Configure();
+        currentState = EnemyState.Spawning;
+
+        pathToPlayer = new NavMeshPath();
+        currentLayer = 2;
+
+        attackTimer = 0f;
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        if (currentHealth > 0)
+        {
+            // Calculate absolute and walking distances between enemy and player
+            float absoluteDistanceToPlayer = Vector3.Distance(playerTransform.position, enemyTransform.position);
+            enemyAgent.CalculatePath(playerTransform.position, pathToPlayer);
+            float traversalDistanceToPlayer = CalculatePathLength(pathToPlayer);
+
+            currentLayer = RemainingArmourLayers();
+
+            if (traversalDistanceToPlayer >= despawnDistance || currentState == EnemyState.Burrowing)
+            {
+                #region Despawn
+
+                // Despawn the enemy
+                currentState = EnemyState.Burrowing;
+
+                #endregion
+            }
+            else if (currentState == EnemyState.Stunned)
+            {
+                #region Stunned 
+
+                stunTimer -= Time.deltaTime;
+                if (stunTimer <= 0f)
+                {
+                    currentState = EnemyState.None;
+                }
+
+                #endregion
+            }
+            else
+            {
+                #region Approach Player
+
+                // Walk towards player and close distance
+                currentState = EnemyState.Seeking;
+
+                if (moveDelayTimer <= 0f)
+                {
+                    // Set standard walking stats
+                    enemyAgent.speed = moveSpeeds[currentLayer];
+                    enemyAgent.angularSpeed = angularSpeeds[currentLayer];
+                    enemyAgent.acceleration = accelerations[currentLayer];
+
+                    // Begin traversal
+                    enemyAgent.SetDestination(playerTransform.position);
+                    enemyAgent.isStopped = false;
+                }
+                else
+                {
+                    // Stop traversal
+                    enemyAgent.ResetPath();
+                    enemyAgent.isStopped = true;
+                    enemyAgent.velocity = Vector3.zero;
+
+                    // Lower timer towards moving again
+                    moveDelayTimer -= Time.deltaTime;
+                }
+
+                #endregion
+
+                #region Attack Player
+
+                if (attackTimer > 0f)
+                {
+                    // Decrease attack timer
+                    attackTimer -= Time.deltaTime;
+                }
+                else
+                {
+                    // If the player is within range
+                    if (Physics.OverlapSphere(enemyTransform.position, attackRadius[currentLayer], playerLayer).Length > 0)
+                    {
+                        // Attack the player
+                        attackTimer = attackRate;
+                        Vector3 knockbackForce = (playerTransform.position - enemyTransform.position).normalized;
+                        knockbackForce.y = attackKnockback.y;
+                        knockbackForce.x *= attackKnockback.x;
+                        knockbackForce.z *= attackKnockback.x;
+
+                        playerStats.TakeDamage(baseDamage, knockbackForce);
+
+                        // Begin movement cooldown
+                        moveDelayTimer = moveDelays[currentLayer];
+                    }
+                }
+
+                #endregion
+            }
+        }
+    }
+
+    // Responsible for removing health from the enemy and spawning damage numbers when damage is dealt
+    public override void TakeDamage(int damage, int expectedDamage, Vector3 position)
+    {
+        int damageTaken = 0;
+        currentLayer = RemainingArmourLayers();
+
+        // Calculate the damage to deal with the current armour layer
+        damageTaken = Mathf.CeilToInt((float)damage * ((100f - (float)layerDefenses[currentLayer]) / 100f));
+
+        // Determine the damage the enemy will take, cut it off if it brings them below 0
+        damageTaken = Mathf.Clamp(damageTaken, 0, currentHealth);
+        currentHealth -= damageTaken;
+
+        // Stun the enemy if a new layer of armour has been taken off
+        int newLayer = RemainingArmourLayers();
+        if (currentLayer != newLayer)
+        {
+            Stun();
+        }
+
+        // If the enemy has taken damage
+        if (damageTaken > 0)
+        {
+            // Draw damage numbers
+            GameObject damageNumberInstance = Instantiate<GameObject>(damageNumberPrefab, damageNumberParentTransform);
+            damageNumberInstance.GetComponent<DamageNumber>().SetupDamageNumber(damageTaken.ToString(), position, (damage == expectedDamage));
+        }
+
+        // If the enemy has died
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    // Stuns the enemy
+    void Stun()
+    {
+        // Stop the enemy, start their timer and stop pathfinding
+        currentState = EnemyState.Stunned;
+        stunTimer = stunDurations[RemainingArmourLayers() + 1];
+        enemyAgent.ResetPath();
+        enemyAgent.isStopped = true;
+        enemyAgent.velocity = Vector3.zero;
+    }
+
+    // Returns how many armour layers remain, from 0-2
+    int RemainingArmourLayers()
+    {
+        int result = 0;
+
+        float healthPercentage = ((float)currentHealth / (float)baseMaxHealth) * 100f;
+        if (healthPercentage > layerPercentages[2])
+        {
+            // 1st layer of armour
+            result = 2;
+        }
+        else if (healthPercentage > layerPercentages[1])
+        {
+            // 2nd layer of armour
+            result = 1;
+        }
+
+        return result;
+    }
+}

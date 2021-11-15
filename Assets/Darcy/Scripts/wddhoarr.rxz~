@@ -1,0 +1,117 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AI;
+
+public class OnionEnemy : Enemy
+{
+    enum EnemyState
+    {
+        None,
+        Burrowing,
+        Spawning,
+        Seeking,
+        Aiming,
+        Charging,
+        Stunned,
+        Dying
+    }
+
+    private EnemyState currentState;
+
+    public int maximumRange;
+
+    public float windupDuration;
+    private float windupTimer;
+
+    public float chargeDuration;
+    private float chargeTimer;
+
+    public float stunDuration;
+    private float stunTimer;
+
+    private Vector3 chargeTarget;
+    private NavMeshPath pathToPlayer;
+
+    public float walkSpeed;
+    public float walkAngularSpeed;
+    public float walkAcceleration;
+
+    public float chargeSpeed;
+    public float chargeAngularSpeed;
+    public float chargeAcceleration;
+
+    public int firstArmourDefense;
+    public int firstArmourPercentage;
+
+    public int secondArmourDefense;
+    public int secondArmourPercentage;
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        base.Configure();
+        currentState = EnemyState.Spawning;
+
+        pathToPlayer = new NavMeshPath();
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        if (currentHealth > 0)
+        {
+            // Calculate absolute and walking distances between enemy and player
+            float absoluteDistanceToPlayer = Vector3.Distance(playerTransform.position, enemyTransform.position);
+            enemyAgent.CalculatePath(playerTransform.position, pathToPlayer);
+            float traversalDistanceToPlayer = GetPathLength(pathToPlayer);
+
+            if (traversalDistanceToPlayer >= despawnDistance || currentState == EnemyState.Burrowing)
+            {
+                #region Despawn
+
+                // Despawn the enemy
+                currentState = EnemyState.Burrowing;
+
+                #endregion
+            }
+            else if ((absoluteDistanceToPlayer > maximumRange) || Physics.Linecast(mainCameraTransform.position, enemyTransform.position + Vector3.up, environmentLayers))
+            {
+                #region Close Distance
+
+                // Walk towards player and close distance
+                currentState = EnemyState.Seeking;
+
+                // Set standard walking stats
+                enemyAgent.speed = walkSpeed;
+                enemyAgent.angularSpeed = walkAngularSpeed;
+                enemyAgent.acceleration = walkAcceleration;
+
+                // Begin traversal
+                enemyAgent.SetDestination(playerTransform.position);
+                enemyAgent.isStopped = false;
+
+                #endregion
+            }
+        }
+    }
+
+    public override void TakeDamage(int damage)
+    {
+        float healthPercentage = ((float)currentHealth / (float)baseMaxHealth);
+        if (healthPercentage > (float)firstArmourPercentage / 100f)
+        {
+            currentHealth -= Mathf.CeilToInt((float)damage * ((100f - (float)firstArmourDefense) / 100f));
+        }
+        else if (((float)currentHealth / (float)baseMaxHealth) > (float)firstArmourPercentage / 100f)
+        {
+            currentHealth -= Mathf.CeilToInt((float)damage * ((100f - (float)firstArmourDefense) / 100f));
+        }
+        else
+        {
+            currentHealth -= damage;
+        }
+
+        currentHealth = Mathf.FloorToInt(Mathf.Clamp(currentHealth, 0, Mathf.Infinity));
+    }
+}

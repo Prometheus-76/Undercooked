@@ -1,0 +1,107 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class ThrowingKnifeController : MonoBehaviour
+{
+    public float moveSpeed;
+
+    public int damageBudget;
+    private int damageDealt;
+    public int maxBounces;
+    public float throwDuration;
+    private float throwTimer;
+
+    public float detectionRadius;
+
+    public LayerMask wallLayers;
+    public LayerMask enemyLayers;
+
+    public Transform holderTransform;
+    public Transform pivotTransform;
+    private Transform currentTargetTransform;
+    private Enemy currentTargetEnemy;
+
+    public static bool isAirborn { get; private set; }
+
+    private void Start()
+    {
+        isAirborn = false;
+        damageDealt = 0;
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        if (isAirborn)
+        {
+            if (currentTargetTransform != null && currentTargetEnemy.currentHealth > 0f)
+            {
+                // Move towards target
+
+                // If target is reached
+                // Execute target
+                // Subtract from damage and increment bounce count
+            }
+            else
+            {
+                // Find a new target
+                Collider[] enemiesWithinRange = Physics.OverlapSphere(holderTransform.position, detectionRadius, enemyLayers);
+
+                if (enemiesWithinRange.Length > 0)
+                {
+                    Transform closestTransform = null;
+                    float closestDistance = Mathf.Infinity;
+
+                    // For each of the enemies within range
+                    for (int i = 0; i < enemiesWithinRange.Length; i++)
+                    {
+                        // Compare to best contending transform from the collider set
+                        // If this is the closest transform so far
+                        if (Vector3.Distance(holderTransform.position, enemiesWithinRange[i].transform.position) < closestDistance)
+                        {
+                            if (Physics.Linecast(holderTransform.position, enemiesWithinRange[i].transform.position + Vector3.up, wallLayers) == false)
+                            {
+
+                            }
+                        }
+
+                        // Check if raycast to enemy is valid
+                    }
+
+                    // If there is a valid contender, assign it to the knife
+                }
+                else
+                {
+                    EndThrow();
+                }
+            }
+
+            // Compare time, bounce count and damage
+            // If any conditions are met, end throw
+        }
+    }
+
+    public void Throw()
+    {
+        // Only allow one throw at a time
+        if (isAirborn)
+        {
+            return;
+        }
+
+        throwTimer = throwDuration;
+        isAirborn = true;
+        damageDealt = 0;
+    }
+
+    public void EndThrow()
+    {
+        throwTimer = 0f;
+        isAirborn = false;
+        damageDealt = 0;
+
+        currentTargetTransform = null;
+        currentTargetEnemy = null;
+    }
+}

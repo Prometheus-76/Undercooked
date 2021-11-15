@@ -8,7 +8,10 @@ EditorBuildSettings:
   - enabled: 0
     path: 
     guid: 00000000000000000000000000000000
-  - enabled: 1
+  - enabled: 0
     path: Assets/Darcy/TestingScene/TestingScene.unity
     guid: e9a9aaec63bad844ab16d3456039312f
+  - enabled: 1
+    path: Assets/Will K/BlockOut/BlockOut.unity
+    guid: 60ca31cda1a46254c8673992676c58fa
   m_configObjects: {}

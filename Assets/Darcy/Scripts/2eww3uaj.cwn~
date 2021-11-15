@@ -1,0 +1,184 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+
+public class UserInterfaceHUD : MonoBehaviour
+{
+    #region Reloading
+    [Header("Reloading")]
+
+    public Image reloadProgressImage;
+    public Image reloadUnderlayImage;
+    public Image reticleImage;
+
+    public static float reloadProgress; // The progress of the current weapon's reload animation
+    #endregion
+
+    #region Wave Counter and Progress
+    [Header("Wave Counter and Progress")]
+
+    public Image waveProgressImage;
+    public TextMeshProUGUI waveNumberText;
+    public TextMeshProUGUI waveProgressText;
+
+    public static float waveProgress; // The progress of the current wave
+    public static int waveNumber; // The number of the current wave
+    #endregion
+
+    #region Player Health
+    [Header("Player Health")]
+
+    public int healthTextMaxSize;
+    public int healthTextMinSize;
+
+    public static int playerCurrentHealth;
+    public static int playerMaxHealth;
+
+    public Image healthProgressImage;
+    public TextMeshProUGUI healthText;
+    private string colourCodeHealthBar;
+    #endregion
+
+    #region Weapon Details
+    [Header("Weapon Details")]
+
+    public TextMeshProUGUI ammoText;
+    public TextMeshProUGUI currentWeaponText;
+    public Image weaponDividerImage;
+
+    public static int ammoInMagazine;
+    public static int ammoInReserves;
+    public static int equippedWeapon;
+    #endregion
+
+    #region Ultimate Ability
+    [Header("Ultimate Ability")]
+
+    public Image minorFillImage;
+    public Image majorFillImage;
+    public TextMeshProUGUI ultimateProgressText;
+
+    public static float ultimateCharge;
+    #endregion
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        reloadProgress = 0f;
+        equippedWeapon = -1;
+
+        // Grab the colour of the health bar and automatically use it for text
+        colourCodeHealthBar = ColorUtility.ToHtmlStringRGBA(healthProgressImage.color);
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        #region Reload Progress
+
+        // If the weapon is reloading
+        if (Mathf.Clamp01(reloadProgress) > 0f)
+        {
+            // Hide reticle
+            reticleImage.enabled = false;
+
+            // Show reload progress
+            reloadProgressImage.enabled = true;
+            reloadUnderlayImage.enabled = true;
+
+            // Update progress
+            reloadProgressImage.fillAmount = Mathf.Clamp01(reloadProgress);
+        }
+        else
+        {
+            if (Movement.isGrappling == false)
+            {
+                // Show reticle
+                reticleImage.enabled = true;
+            }
+            else
+            {
+                // Hide reticle
+                reticleImage.enabled = false;
+            }
+
+            // Hide reload progress
+            reloadProgressImage.enabled = false;
+            reloadUnderlayImage.enabled = false;
+        }
+
+        #endregion
+
+        #region Wave Counter and Progress
+
+        waveProgressImage.fillAmount = Mathf.Clamp01(waveProgress);
+        waveProgressText.text = (Mathf.Clamp01(waveProgress) * 100f).ToString("F1") + "%";
+        waveNumberText.text = "Stage " + waveNumber;
+
+        #endregion
+
+        #region Player Health
+
+        healthText.text = "<size=" + healthTextMaxSize + "><color=#" + colourCodeHealthBar + ">" + playerCurrentHealth + "<size=" + healthTextMinSize + "><color=white> / " + playerMaxHealth;
+        healthProgressImage.fillAmount = playerMaxHealth != 0 ? Mathf.Clamp01((float)playerCurrentHealth / (float)playerMaxHealth) : 1f;
+
+        #endregion
+
+        #region Weapon Details
+
+        // Ammo display
+        if ((ammoInReserves > 0 && ammoInReserves != -1) || ammoInReserves == -1 || ammoInMagazine > 0)
+        {
+            // There is ammo in the weapon
+            ammoText.text = ammoInMagazine + " <size=60%><color=#FFFFFFAA>/ " + (ammoInReserves == -1 ? "∞" : ammoInReserves.ToString());
+        }
+        else
+        {
+            // There is no ammo in the magazine or in reserves
+            ammoText.text = "<size=60%>Empty";
+        }
+
+        // Weapon icon
+        switch (equippedWeapon)
+        {
+            case -1:
+                ammoText.enabled = false;
+                weaponDividerImage.enabled = false;
+                currentWeaponText.enabled = false;
+                currentWeaponText.text = "None";
+                break;
+            case 0:
+                ammoText.enabled = true;
+                weaponDividerImage.enabled = true;
+                currentWeaponText.enabled = true;
+                currentWeaponText.text = "Microwave Gun";
+                break;
+            case 1:
+                ammoText.enabled = true;
+                weaponDividerImage.enabled = true;
+                currentWeaponText.enabled = true;
+                currentWeaponText.text = "A-Salt Rifle";
+                break;
+            case 2:
+                ammoText.enabled = true;
+                weaponDividerImage.enabled = true;
+                currentWeaponText.enabled = true;
+                currentWeaponText.text = "Pepper Shotgun";
+                break;
+        }
+
+        #endregion
+
+        #region Ultimate Ability
+
+        float ultimateChargePercent = (ultimateCharge * 100f);
+
+        minorFillImage.fillAmount = (ultimateCharge * (250f/290f)) + (((Mathf.FloorToInt(ultimateChargePercent) - (Mathf.FloorToInt(ultimateChargePercent) % 20f) / 20f) * (10f/290f)));
+        majorFillImage.fillAmount = (float)(Mathf.FloorToInt(ultimateChargePercent) - (Mathf.FloorToInt(ultimateChargePercent) % 20f)) / 100f;
+        ultimateProgressText.text = (ultimateCharge < 1f ? Mathf.FloorToInt(ultimateChargePercent) + "<size=80%> %" : "Ready!");
+
+        #endregion
+    }
+}

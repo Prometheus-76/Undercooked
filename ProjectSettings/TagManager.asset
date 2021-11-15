@@ -3,7 +3,9 @@
 --- !u!78 &1
 TagManager:
   serializedVersion: 2
-  tags: []
+  tags:
+  - DamageNumberParent
+  - Enemy
   layers:
   - Default
   - TransparentFX
@@ -16,11 +18,11 @@ TagManager:
   - Ground
   - GrapplePoint
   - Weapon
-  - Post Processing
-  - 
-  - 
-  - 
-  - 
+  - HUD
+  - Enemy
+  - Player
+  - SpawnPoint
+  - Environment
   - 
   - 
   - 
